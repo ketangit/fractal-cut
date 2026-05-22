@@ -1,0 +1,261 @@
+name: Build, Test & Deploy
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+env:
+  REGION: us-central1
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  BACKEND_SERVICE: puzzle-backend
+  FRONTEND_SERVICE: puzzle-frontend
+
+jobs:
+  # ─── Rust / Wasm ──────────────────────────────────────────────────────────
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: puzzle-core
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build browser Wasm (bindgen)
+        working-directory: puzzle-core
+        run: wasm-pack build --release --target web --out-dir ../pkg
+
+      - name: Build server Wasm (C-ABI)
+        working-directory: puzzle-core
+        run: cargo build --release --target wasm32-unknown-unknown
+
+      - name: Run Rust tests
+        working-directory: puzzle-core
+        run: cargo test --release
+
+      - name: Upload browser Wasm pkg
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-wasm
+          path: pkg/
+
+      - name: Upload server Wasm
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-wasm
+          path: puzzle-core/target/wasm32-unknown-unknown/release/puzzle_core.wasm
+
+  # ─── Next.js frontend ─────────────────────────────────────────────────────
+  frontend:
+    runs-on: ubuntu-latest
+    needs: wasm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Download browser Wasm
+        uses: actions/download-artifact@v4
+        with:
+          name: browser-wasm
+          path: pkg/
+
+      - name: Copy Wasm to frontend lib/wasm
+        run: |
+          cp pkg/puzzle_core.js frontend/lib/wasm/puzzle_core.js
+          cp pkg/puzzle_core_bg.wasm frontend/lib/wasm/puzzle_core_bg.wasm
+          cp pkg/puzzle_core.d.ts frontend/lib/wasm/puzzle_core.d.ts
+          cp pkg/puzzle_core_bg.wasm.d.ts frontend/lib/wasm/puzzle_core_bg.wasm.d.ts
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        working-directory: frontend
+        run: pnpm run build
+
+      - name: Upload Next.js build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/.next/
+
+  # ─── Spring Boot backend ──────────────────────────────────────────────────
+  backend:
+    runs-on: ubuntu-latest
+    needs: wasm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: 21
+          distribution: temurin
+          cache: maven
+
+      - name: Download server Wasm
+        uses: actions/download-artifact@v4
+        with:
+          name: server-wasm
+          path: backend/src/main/resources/wasm/
+
+      - name: Rename to expected filename
+        run: mv backend/src/main/resources/wasm/puzzle_core.wasm \
+               backend/src/main/resources/wasm/puzzle_core_server.wasm
+
+      - name: Build & unit tests
+        working-directory: backend
+        run: mvn package -q
+
+      - name: Upload backend jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar
+          path: backend/target/backend-*.jar
+
+  # ─── Isomorphic parity gate ───────────────────────────────────────────────
+  isomorphic-parity:
+    runs-on: ubuntu-latest
+    needs: [frontend, backend]
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/master'
+    services:
+      postgres:
+        image: postgres:18.2
+        env:
+          POSTGRES_DB: puzzlecore
+          POSTGRES_USER: puzzlecore
+          POSTGRES_PASSWORD: puzzlecore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: 21
+          distribution: temurin
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download backend jar
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jar
+          path: jars/
+
+      - name: Start backend
+        env:
+          DB_URL: jdbc:postgresql://localhost:5432/puzzlecore
+          DB_USER: puzzlecore
+          DB_PASS: puzzlecore
+        run: |
+          java -jar jars/backend-*.jar &
+          until curl -sf http://localhost:8080/actuator/health; do sleep 2; done
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Download browser Wasm
+        uses: actions/download-artifact@v4
+        with:
+          name: browser-wasm
+          path: pkg/
+
+      - name: Install Playwright
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+
+      # Run Playwright to capture browser SVG, then compare with server SVG
+      - name: Isomorphic parity check (modes 1, 2, 3)
+        working-directory: frontend
+        run: pnpm exec playwright test e2e/isomorphic.spec.ts
+        env:
+          API_URL: http://localhost:8080
+
+  # ─── Deploy (only on master push) ─────────────────────────────────────────
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [isomorphic-parity]
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    permissions:
+      id-token: write  # Workload Identity Federation
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build & push Docker images
+        run: |
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+          docker build \
+            --target runtime \
+            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/puzzle/backend:${{ github.sha }} \
+            .
+          docker build \
+            --target frontend-runtime \
+            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/puzzle/frontend:${{ github.sha }} \
+            .
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/puzzle/backend:${{ github.sha }}
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/puzzle/frontend:${{ github.sha }}
+
+      - name: Deploy backend to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.BACKEND_SERVICE }} \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/puzzle/backend:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --min-instances 0 \
+            --max-instances 10 \
+            --concurrency 4 \
+            --memory 1Gi \
+            --set-env-vars "DB_URL=${{ secrets.DB_URL }},DB_USER=${{ secrets.DB_USER }},DB_PASS=${{ secrets.DB_PASS }}"
+
+      - name: Deploy frontend to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.FRONTEND_SERVICE }} \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/puzzle/frontend:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --min-instances 0 \
+            --max-instances 20 \
+            --concurrency 80 \
+            --memory 512Mi \
+            --set-env-vars "NEXT_PUBLIC_API_URL=${{ secrets.API_URL }}"

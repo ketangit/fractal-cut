@@ -1,0 +1,48 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:18.2
+    environment:
+      POSTGRES_DB: puzzlecore
+      POSTGRES_USER: puzzlecore
+      POSTGRES_PASSWORD: puzzlecore
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U puzzlecore"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      target: runtime
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/puzzlecore
+      DB_USER: puzzlecore
+      DB_PASS: puzzlecore
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      target: frontend-runtime
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8080
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
