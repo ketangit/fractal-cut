@@ -18,7 +18,12 @@
 
   <properties>
     <java.version>25</java.version>
-    <chicory.version>1.0.0</chicory.version>
+    <chicory.version>1.7.5</chicory.version>
+    <!-- Security patch overrides for Spring Boot 4.0.0 BOM-managed deps -->
+    <tomcat.version>11.0.22</tomcat.version>
+    <logback.version>1.5.32</logback.version>
+    <postgresql.version>42.7.11</postgresql.version>
+    <snakeyaml.version>2.6</snakeyaml.version>
   </properties>
 
   <dependencies>
