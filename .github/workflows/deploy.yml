@@ -118,8 +118,7 @@ jobs:
           path: backend/src/main/resources/wasm/
 
       - name: Rename to expected filename
-        run: mv backend/src/main/resources/wasm/puzzle_core.wasm \
-               backend/src/main/resources/wasm/puzzle_core_server.wasm
+        run: mv backend/src/main/resources/wasm/puzzle_core.wasm backend/src/main/resources/wasm/puzzle_core_server.wasm
 
       - name: Build & unit tests
         working-directory: backend

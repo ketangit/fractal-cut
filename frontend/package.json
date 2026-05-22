@@ -18,6 +18,11 @@
     "react-dom": "^18",
     "three": "^0.165.0"
   },
+  "pnpm": {
+    "overrides": {
+      "semver": "7.6.3"
+    }
+  },
   "devDependencies": {
     "@playwright/test": "^1.45.0",
     "@types/node": "^20",
