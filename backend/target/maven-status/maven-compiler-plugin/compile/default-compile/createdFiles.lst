@@ -1,0 +1,15 @@
+com/puzzlecore/controller/dto/GenerateResponse.class
+com/puzzlecore/model/PuzzleConfig.class
+com/puzzlecore/controller/dto/OrderResponse.class
+com/puzzlecore/controller/dto/GenerateRequest.class
+com/puzzlecore/repository/PuzzleOutputRepository.class
+com/puzzlecore/service/PuzzleService.class
+com/puzzlecore/model/Order.class
+com/puzzlecore/controller/OrderController.class
+com/puzzlecore/PuzzleBackendApplication.class
+com/puzzlecore/controller/PuzzleController.class
+com/puzzlecore/repository/OrderRepository.class
+com/puzzlecore/model/PuzzleOutput.class
+com/puzzlecore/repository/PuzzleConfigRepository.class
+com/puzzlecore/service/PuzzleWasmService.class
+com/puzzlecore/controller/dto/OrderRequest.class
