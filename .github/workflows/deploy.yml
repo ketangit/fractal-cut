@@ -32,7 +32,7 @@ jobs:
 
       - name: Build browser Wasm (bindgen)
         working-directory: puzzle-core
-        run: wasm-pack build --release --target web --out-dir ../pkg
+        run: wasm-pack build --release --target web --out-dir ../pkg -- --features bindgen
 
       - name: Build server Wasm (C-ABI)
         working-directory: puzzle-core

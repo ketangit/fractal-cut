@@ -9,7 +9,7 @@ RUN curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 WORKDIR /build/puzzle-core
 
 # Browser Wasm (feature=bindgen, wasm-bindgen glue)
-RUN wasm-pack build --release --target web --out-dir ../pkg
+RUN wasm-pack build --release --target web --out-dir ../pkg -- --features bindgen
 
 # Server Wasm (no features, C-ABI)
 RUN cargo build --release --target wasm32-unknown-unknown
