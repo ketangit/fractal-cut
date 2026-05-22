@@ -298,15 +298,15 @@ impl CircleFractalJigsaw {
         }
     }
 
-    fn svg_header(width: f64, height: f64) -> String {
+    fn svg_header(width: f64, height: f64, piece_count: usize) -> String {
         format!(
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\
-<svg baseProfile=\"full\" height=\"{}mm\" version=\"1.1\" \
+<svg baseProfile=\"full\" data-piece-count=\"{}\" height=\"{}mm\" version=\"1.1\" \
 viewBox=\"0 0 {} {}\" width=\"{}mm\" \
 xmlns=\"http://www.w3.org/2000/svg\" \
 xmlns:ev=\"http://www.w3.org/2001/xml-events\" \
 xmlns:xlink=\"http://www.w3.org/1999/xlink\"><defs />",
-            height, width, height, width
+            piece_count, height, width, height, width
         )
     }
 
@@ -336,7 +336,7 @@ xmlns:xlink=\"http://www.w3.org/1999/xlink\"><defs />",
     pub fn export_svg(&self, frame: f64, rad: f64, frame_corner: f64, arcshape: u8) -> String {
         let width = self.ncols as f64 * 2.0 * rad + 2.0 * frame;
         let height = self.nrows as f64 * 2.0 * rad + 2.0 * frame;
-        let mut data = Self::svg_header(width, height);
+        let mut data = Self::svg_header(width, height, self.n_pieces());
         for p in &self.pieces {
             let arcs = Self::piece_arcs(p, rad, frame);
             data += &format!(
@@ -363,7 +363,7 @@ xmlns:xlink=\"http://www.w3.org/1999/xlink\"><defs />",
     ) -> String {
         let width = self.ncols as f64 * 2.0 * rad + 2.0 * frame;
         let height = self.nrows as f64 * 2.0 * rad + 2.0 * frame;
-        let mut data = Self::svg_header(width, height);
+        let mut data = Self::svg_header(width, height, self.n_pieces());
         let mut all_arcs: Vec<Arc> = Vec::new();
         data += "<path fill=\"none\" stroke=\"black\" stroke-width=\"0.1\" d=\"";
         let mut current_x = -1i32;
@@ -398,7 +398,7 @@ xmlns:xlink=\"http://www.w3.org/1999/xlink\"><defs />",
     ) -> String {
         let width = self.ncols as f64 * 2.0 * rad + 2.0 * frame;
         let height = self.nrows as f64 * 2.0 * rad + 2.0 * frame;
-        let mut data = Self::svg_header(width, height);
+        let mut data = Self::svg_header(width, height, self.n_pieces());
         let mut all_arcs: Vec<Arc> = Vec::new();
         for p in &self.pieces {
             let arcs = Self::piece_arcs(p, rad, frame);
@@ -444,7 +444,7 @@ xmlns:xlink=\"http://www.w3.org/1999/xlink\"><defs />",
     ) -> String {
         let width = self.ncols as f64 * 2.0 * rad + 2.0 * frame;
         let height = self.nrows as f64 * 2.0 * rad + 2.0 * frame;
-        let mut data = Self::svg_header(width, height);
+        let mut data = Self::svg_header(width, height, self.n_pieces());
         let mut prng = Prng::new(coloring_seed);
         let paths = self.multipaths(frame, rad, arcshape);
         for p in &paths {

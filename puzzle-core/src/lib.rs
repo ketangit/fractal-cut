@@ -120,7 +120,7 @@ mod server_abi {
         jig.coloring_seed = prng.snapshot();
 
         let svg = jig.export(
-            cfg.arc_shape,
+            cfg.mode,
             cfg.frame,
             cfg.tile_radius,
             cfg.frame_corner,

@@ -11,6 +11,7 @@ pub struct PuzzleConfig {
     pub frame: f64,
     pub frame_corner: f64,
     pub arc_shape: u8,
+    pub mode: u8,
     pub custom_border_svg: Option<String>,
     pub border_scale: f64,
 }
@@ -37,6 +38,7 @@ impl PuzzleConfig {
             frame: v["frame"].as_f64().ok_or("missing frame")?,
             frame_corner: v["frame_corner"].as_f64().ok_or("missing frame_corner")?,
             arc_shape: v["arc_shape"].as_u64().unwrap_or(0) as u8,
+            mode: v["mode"].as_u64().unwrap_or(3) as u8,
             custom_border_svg: v["custom_border_svg"].as_str().map(String::from),
             border_scale: v["border_scale"].as_f64().unwrap_or(1.0),
         })
