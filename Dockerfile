@@ -21,7 +21,7 @@ RUN sha256sum Cargo.lock | tee /build/cargo_lock.sha256
 FROM node:24-alpine AS frontend-builder
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
