@@ -98,6 +98,10 @@ jobs:
         working-directory: frontend
         run: pnpm run build
 
+      - name: Bundle styled-jsx into standalone
+        working-directory: frontend
+        run: cp -rL node_modules/styled-jsx .next/standalone/node_modules/
+
       - name: Upload Next.js build
         uses: actions/upload-artifact@v7
         with:
