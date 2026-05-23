@@ -2,6 +2,7 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -17,6 +18,11 @@
     "react": "^18",
     "react-dom": "^18",
     "three": "^0.165.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "semver": "7.6.3"
+    }
   },
   "devDependencies": {
     "@playwright/test": "^1.45.0",

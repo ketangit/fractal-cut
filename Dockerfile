@@ -21,7 +21,7 @@ RUN sha256sum Cargo.lock | tee /build/cargo_lock.sha256
 FROM node:24-alpine AS frontend-builder
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
@@ -49,12 +49,13 @@ RUN apt-get update && apt-get install -y maven && apt-get clean
 RUN mvn package -DskipTests -q
 
 # Create minimal JRE using jlink
+# Modules required for Spring Boot 4 + Hibernate + PostgreSQL + Flyway
 RUN $JAVA_HOME/bin/jlink \
-    --add-modules java.base,java.logging \
+    --add-modules java.base,java.compiler,java.instrument,java.logging,java.management,java.management.rmi,java.naming,java.net.http,java.rmi,java.scripting,java.security.jgss,java.security.sasl,java.sql,java.xml,jdk.charsets,jdk.crypto.cryptoki,jdk.crypto.ec,jdk.jfr,jdk.management,jdk.naming.dns,jdk.naming.rmi,jdk.net,jdk.security.auth,jdk.unsupported,jdk.zipfs \
     --strip-debug \
     --no-man-pages \
     --no-header-files \
-    --compress=2 \
+    --compress=zip-6 \
     --output /javaruntime
 
 # Stage 4: Runtime — Spring Boot fat jar with distroless

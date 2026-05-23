@@ -63,7 +63,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: latest
+          version: 10.33.0
 
       - uses: actions/setup-node@v4
         with:
@@ -118,8 +118,7 @@ jobs:
           path: backend/src/main/resources/wasm/
 
       - name: Rename to expected filename
-        run: mv backend/src/main/resources/wasm/puzzle_core.wasm \
-               backend/src/main/resources/wasm/puzzle_core_server.wasm
+        run: mv backend/src/main/resources/wasm/puzzle_core.wasm backend/src/main/resources/wasm/puzzle_core_server.wasm
 
       - name: Build & unit tests
         working-directory: backend
@@ -180,7 +179,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: latest
+          version: 10.33.0
 
       - name: Download browser Wasm
         uses: actions/download-artifact@v4
