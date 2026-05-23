@@ -98,12 +98,6 @@ jobs:
         working-directory: frontend
         run: pnpm run build
 
-      - name: Bundle styled-jsx into standalone
-        working-directory: frontend
-        run: |
-          src=$(node -e "process.stdout.write(require('path').dirname(require.resolve('styled-jsx/package.json')))")
-          cp -r "$src" .next/standalone/node_modules/styled-jsx
-
       - name: Upload Next.js build
         uses: actions/upload-artifact@v7
         with:
@@ -186,6 +180,10 @@ jobs:
         with:
           node-version: 24
 
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.0
+
       - name: Download backend jar
         uses: actions/download-artifact@v8
         with:
@@ -219,6 +217,10 @@ jobs:
           name: frontend-build
           path: frontend/.next/
 
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
       - name: Prepare Next.js standalone
         run: cp -r frontend/.next/static frontend/.next/standalone/.next/
 
@@ -235,10 +237,6 @@ jobs:
             sleep 2
           done
 
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10.33.0
-
       - name: Download browser Wasm
         uses: actions/download-artifact@v8
         with:
@@ -247,9 +245,7 @@ jobs:
 
       - name: Install Playwright
         working-directory: frontend
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       # Run Playwright to capture browser SVG, then compare with server SVG
       - name: Isomorphic parity check (modes 1, 2, 3)
