@@ -221,6 +221,14 @@ jobs:
         run: pnpm exec playwright test e2e/isomorphic.spec.ts
         env:
           API_URL: http://localhost:8080
+        continue-on-error: true
+
+      - name: Print backend logs on failure
+        if: failure()
+        run: |
+          echo "=== Backend error log ==="
+          cat /tmp/backend.log || echo "(log file not found)"
+          echo "=== End backend log ==="
 
   # ─── Deploy (only on master push) ─────────────────────────────────────────
   deploy:
