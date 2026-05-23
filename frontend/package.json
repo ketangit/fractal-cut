@@ -11,24 +11,19 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@react-three/drei": "^9.122.0",
-    "@react-three/fiber": "^8.18.0",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
     "@types/three": "^0.165.0",
     "next": "15.5.18",
-    "react": "^18",
-    "react-dom": "^18",
+    "react": "^19",
+    "react-dom": "^19",
     "three": "^0.165.0"
-  },
-  "pnpm": {
-    "overrides": {
-      "semver": "7.6.3"
-    }
   },
   "devDependencies": {
     "@playwright/test": "^1.45.0",
     "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
     "postcss": "^8",

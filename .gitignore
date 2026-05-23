@@ -1,0 +1,17 @@
+# Rust build artifacts
+puzzle-core/target/
+pkg/
+
+# Wasm build outputs (generated, not committed)
+frontend/lib/wasm/
+backend/src/main/resources/wasm/
+
+# Next.js
+frontend/.next/
+frontend/node_modules/
+
+# Java / Maven
+backend/target/
+
+# Docker
+.env

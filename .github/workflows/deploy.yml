@@ -17,10 +17,11 @@ jobs:
   wasm:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@1.83
+      - uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: '1.83'
           targets: wasm32-unknown-unknown
 
       - uses: Swatinem/rust-cache@v2
@@ -43,13 +44,13 @@ jobs:
         run: cargo test --release
 
       - name: Upload browser Wasm pkg
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: browser-wasm
           path: pkg/
 
       - name: Upload server Wasm
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: server-wasm
           path: puzzle-core/target/wasm32-unknown-unknown/release/puzzle_core.wasm
@@ -59,20 +60,20 @@ jobs:
     runs-on: ubuntu-latest
     needs: wasm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.33.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Download browser Wasm
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: browser-wasm
           path: pkg/
@@ -93,7 +94,7 @@ jobs:
         run: pnpm run build
 
       - name: Upload Next.js build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-build
           path: frontend/.next/
@@ -103,16 +104,16 @@ jobs:
     runs-on: ubuntu-latest
     needs: wasm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           java-version: 25
           distribution: temurin
           cache: maven
 
       - name: Download server Wasm
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: server-wasm
           path: backend/src/main/resources/wasm/
@@ -125,7 +126,7 @@ jobs:
         run: mvn package -q
 
       - name: Upload backend jar
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-jar
           path: backend/target/backend-*.jar
@@ -151,19 +152,19 @@ jobs:
           --health-retries 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           java-version: 25
           distribution: temurin
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
 
       - name: Download backend jar
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: backend-jar
           path: jars/
@@ -177,12 +178,12 @@ jobs:
           java -jar jars/backend-*.jar &
           until curl -sf http://localhost:8080/actuator/health; do sleep 2; done
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.33.0
 
       - name: Download browser Wasm
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: browser-wasm
           path: pkg/
@@ -210,14 +211,14 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       - name: Build & push Docker images
         run: |

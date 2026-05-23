@@ -3,6 +3,8 @@ FROM rust:1.83 AS wasm-builder
 WORKDIR /build
 COPY puzzle-core/ puzzle-core/
 
+RUN rustup target add wasm32-unknown-unknown
+
 # Install wasm-pack (browser bindgen target)
 RUN curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
@@ -23,7 +25,7 @@ WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY frontend/ ./
@@ -36,7 +38,7 @@ COPY --from=wasm-builder /build/pkg/puzzle_core_bg.wasm.d.ts lib/wasm/puzzle_cor
 RUN pnpm run build
 
 # Stage 3: Build Spring Boot backend
-FROM eclipse-temurin:25-jdk AS backend-builder
+FROM maven:3.9-eclipse-temurin-25 AS backend-builder
 WORKDIR /app
 
 COPY backend/pom.xml ./
@@ -45,27 +47,12 @@ COPY backend/src/ src/
 COPY --from=wasm-builder /build/puzzle-core/target/wasm32-unknown-unknown/release/puzzle_core.wasm \
      src/main/resources/wasm/puzzle_core_server.wasm
 
-RUN apt-get update && apt-get install -y maven && apt-get clean
 RUN mvn package -DskipTests -q
 
-# Create minimal JRE using jlink
-# Modules required for Spring Boot 4 + Hibernate + PostgreSQL + Flyway
-RUN $JAVA_HOME/bin/jlink \
-    --add-modules java.base,java.compiler,java.instrument,java.logging,java.management,java.management.rmi,java.naming,java.net.http,java.rmi,java.scripting,java.security.jgss,java.security.sasl,java.sql,java.xml,jdk.charsets,jdk.crypto.cryptoki,jdk.crypto.ec,jdk.jfr,jdk.management,jdk.naming.dns,jdk.naming.rmi,jdk.net,jdk.security.auth,jdk.unsupported,jdk.zipfs \
-    --strip-debug \
-    --no-man-pages \
-    --no-header-files \
-    --compress=zip-6 \
-    --output /javaruntime
-
-# Stage 4: Runtime — Spring Boot fat jar with distroless
-FROM gcr.io/distroless/base-debian12 AS runtime
+# Stage 4: Runtime — Spring Boot fat jar on a full JRE
+FROM eclipse-temurin:25-jre AS runtime
 WORKDIR /app
 
-ENV JAVA_HOME=/opt/java/openjdk
-ENV PATH="${JAVA_HOME}/bin:${PATH}"
-
-COPY --from=backend-builder /javaruntime $JAVA_HOME
 COPY --from=backend-builder /app/target/backend-*.jar app.jar
 
 EXPOSE 8080

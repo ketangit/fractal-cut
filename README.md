@@ -5,7 +5,7 @@ Design laser-cut fractal jigsaw puzzles with a unified geometry engine running i
 ## Features
 
 - **Seeded deterministic puzzle generation** — reproducible results with `seed` parameter
-- **2D & 3D preview** — React Three Fiber visualization with real-time extrusion
+- **2D & 3D preview** — React Three Fiber v9 visualization with real-time extrusion
 - **Custom borders** — load SVG paths to constrain puzzle to custom shapes
 - **4 SVG export modes**:
   - Mode 0: Individual pieces (overlapping)
@@ -27,6 +27,12 @@ Opens:
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8080
 - PostgreSQL: localhost:5432
+
+> **Note:** If you previously ran `docker compose up` with an older Postgres version, wipe the volume first:
+> ```bash
+> docker compose down -v
+> docker compose up
+> ```
 
 ### Without Docker
 
@@ -54,14 +60,14 @@ cd backend && mvn package -DskipTests
 java -jar backend/target/backend-*.jar
 
 # Frontend (standalone)
-cd frontend && pnpm start
+cd frontend && pnpm dev
 ```
 
 ## Architecture
 
 ### puzzle-core (Rust/WebAssembly)
 
-Geometry engine ported from the original JavaScript. Compiled to **two Wasm targets** from identical source:
+Geometry engine compiled to **two Wasm targets** from identical source:
 
 | Target | ABI | Use Case |
 |--------|-----|----------|
@@ -74,16 +80,16 @@ Geometry engine ported from the original JavaScript. Compiled to **two Wasm targ
 - `arc.rs` — 3 tile shapes (circular, square, octagonal)
 - `mask.rs` — Custom border rasterization (kurbo for server, plotpath for browser)
 
-### frontend (Next.js 14)
+### frontend (Next.js 15)
 
 Single-page configurator UI with:
 - **Sliders** for all puzzle parameters (seed, cols, rows, tile radius, etc.)
 - **2D SVG preview** — rendered directly
-- **3D preview** — R3F Canvas with ExtrudeGeometry, 6mm depth
+- **3D preview** — R3F v9 Canvas with ExtrudeGeometry, 6mm depth (React 19, `ssr: false`)
 - **Custom border upload** — SVG file → mask → passed to Wasm
 - **4 export buttons** — download SVG in any mode
 
-Wasm binary is colocated at `lib/wasm/` (required for webpack's `asyncWebAssembly` resolver).
+Wasm binary is colocated at `lib/wasm/` (required for webpack's `asyncWebAssembly` resolver — webpack resolves `.wasm` via `import.meta.url` relative to the `.js` glue file).
 
 ### backend (Spring Boot 4.0)
 
@@ -93,7 +99,7 @@ REST API:
 - `POST /api/orders` — create order
 - `GET /api/orders/{id}` — retrieve order
 
-**Wasm integration:** `PuzzleWasmService` uses Chicory 1.0.0 to instantiate the server Wasm. Instances are pooled (one per CPU core) and reused across requests via `BlockingQueue`.
+**Wasm integration:** `PuzzleWasmService` uses Chicory 1.7.5 to instantiate the server Wasm. Instances are pooled (one per CPU core) and reused across requests via `BlockingQueue`.
 
 **Database:** PostgreSQL with Flyway migrations. Three tables:
 - `puzzle_configs` — seed, dimensions, parameters
@@ -111,10 +117,11 @@ cd puzzle-core
 cargo test --release
 
 # Build browser Wasm
-wasm-pack build --release --target web --out-dir ../pkg
+wasm-pack build --release --target web --out-dir ../pkg -- --features bindgen
 
 # Copy to frontend
-cp pkg/puzzle_core*.{js,wasm,d.ts} ../frontend/lib/wasm/
+cp pkg/puzzle_core.js pkg/puzzle_core_bg.wasm pkg/puzzle_core.d.ts pkg/puzzle_core_bg.wasm.d.ts \
+   frontend/lib/wasm/
 
 # Build server Wasm
 cargo build --release --target wasm32-unknown-unknown
@@ -155,7 +162,7 @@ The `.github/workflows/deploy.yml` workflow:
 2. Builds frontend → runs `pnpm build`
 3. Builds backend → runs `mvn package`
 4. **Isomorphic parity gate** — Playwright E2E test asserts browser SVG === server SVG (modes 1–3)
-5. Pushes Docker images to Google Container Registry
+5. Pushes Docker images to Google Artifact Registry
 6. Deploys two Cloud Run services (backend + frontend) via Workload Identity Federation
 
 **Required GitHub secrets:**
@@ -168,16 +175,12 @@ The `.github/workflows/deploy.yml` workflow:
 
 **Docker multi-stage build:**
 ```
-Stage 1: wasm-builder (rust:1.83)        → both Wasm binaries
-Stage 2: frontend-builder (node:24)      → Next.js standalone
-Stage 3: backend-builder (openjdk:25)    → Spring Boot fat jar + minimal JRE (jlink)
-Stage 4: runtime (distroless base)       → Backend container
-Stage 5: frontend-runtime (distroless)   → Frontend container
+Stage 1: wasm-builder (rust:1.83)                    → both Wasm binaries
+Stage 2: frontend-builder (node:24-alpine)            → Next.js standalone build
+Stage 3: backend-builder (maven:3.9-eclipse-temurin-25) → Spring Boot fat jar
+Stage 4: runtime (eclipse-temurin:25-jre)             → Backend container
+Stage 5: frontend-runtime (distroless/nodejs24)        → Frontend container
 ```
-
-**Container optimizations:**
-- jlink: ~50MB minimal JRE (vs 300MB+ default)
-- distroless: no shell, no package managers, minimal attack surface
 
 ## Testing
 
@@ -204,16 +207,14 @@ JSON config parsing and serialization.
 pnpm exec playwright test e2e/isomorphic.spec.ts
 ```
 
-Generates puzzle in browser, captures SVG. Calls server `/api/puzzle/generate` with same config, captures SVG. Asserts equality (modes 1, 2, 3).
-
 ## Troubleshooting
 
 ### Wasm not loading in browser
 
 Check that:
-1. `lib/wasm/puzzle_core_bg.wasm` exists (webpack `asyncWebAssembly` resolves via `import.meta.url`)
-2. `next.config.mjs` has `webpack.experiments.asyncWebAssembly = true`
-3. Browser DevTools → Network tab: verify `.wasm` request succeeds with 200 OK
+1. `lib/wasm/puzzle_core_bg.wasm` exists — run `wasm-pack build` and copy outputs to `frontend/lib/wasm/`
+2. Browser DevTools → Network tab: verify `.wasm` request succeeds with 200 OK
+3. The `.wasm` file must live inside the Next.js project tree (`lib/wasm/`); placing it in `public/` breaks webpack's `import.meta.url` resolution
 
 ### Backend Wasm fails to instantiate
 
@@ -224,12 +225,12 @@ Check that:
    wasm-objdump -x puzzle_core_server.wasm | grep "function "
    ```
 
-### Large Docker image size
+### Postgres volume conflict
 
-The `backend/target/` directory (56MB jar) persists in git history. To remove permanently:
+If the local postgres container fails to start after a version upgrade, wipe the named volume:
 ```bash
-git filter-repo --path backend/target/ --invert-paths --force
-git push --force-with-lease
+docker compose down -v
+docker compose up
 ```
 
 ## License

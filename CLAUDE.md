@@ -10,7 +10,7 @@ An isomorphic fractal jigsaw puzzle stack where the **same Rust geometry engine 
 
 ```
 puzzle-core/   Rust library — dual-ABI Wasm (browser + server)
-frontend/      Next.js 14 app — configurator UI, 2D/3D preview
+frontend/      Next.js 15 app — configurator UI, 2D/3D preview
 backend/       Spring Boot 4.0 — REST API, Chicory Wasm runtime, PostgreSQL
 Dockerfile     Multi-stage build (4 stages)
 docker-compose.yml  Local dev with postgres:18.2
@@ -23,7 +23,7 @@ docker-compose.yml  Local dev with postgres:18.2
 cd puzzle-core
 
 # Browser Wasm (wasm-bindgen glue → pkg/)
-wasm-pack build --release --target web --out-dir ../pkg
+wasm-pack build --release --target web --out-dir ../pkg -- --features bindgen
 
 # Server Wasm (C-ABI, no bindgen → target/wasm32-unknown-unknown/release/)
 cargo build --release --target wasm32-unknown-unknown
@@ -75,8 +75,7 @@ The browser Wasm binary lives at `frontend/lib/wasm/` (colocated with the JS glu
 
 After `wasm-pack build`, copy outputs:
 ```bash
-cp pkg/puzzle_core.js pkg/puzzle_core_bg.wasm pkg/puzzle_core.d.ts pkg/puzzle_core_bg.wasm.d.ts \
-   frontend/lib/wasm/
+cp pkg/puzzle_core.js pkg/puzzle_core_bg.wasm pkg/puzzle_core.d.ts pkg/puzzle_core_bg.wasm.d.ts frontend/lib/wasm/
 ```
 
 `usePuzzleWasm` uses a module-level singleton (`cached` + `initPromise`) so Wasm is only initialized once across React re-renders.
@@ -137,6 +136,7 @@ PostgreSQL with Flyway migrations in `src/main/resources/db/migration/`. Three t
 ## Local development
 
 ```bash
+docker compose build --no-cache backend
 docker compose up   # starts postgres:18.2, backend :8080, frontend :3000
 ```
 
@@ -157,8 +157,8 @@ Deploy requires secrets: `GCP_PROJECT_ID`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GC
 
 | Stage | Base | Output |
 |-------|------|--------|
-| `wasm-builder` | `rust:1.79` | Both Wasm binaries |
-| `frontend-builder` | `node:22-alpine` | Next.js standalone build |
-| `backend-builder` | `eclipse-temurin:21-jdk` | Spring Boot fat jar |
-| `runtime` | `eclipse-temurin:21-jre` | Backend container |
-| `frontend-runtime` | `node:22-alpine` | Frontend container (runs `node server.js`) |
+| `wasm-builder` | `rust:1.83` | Both Wasm binaries |
+| `frontend-builder` | `node:24-alpine` | Next.js standalone build |
+| `backend-builder` | `maven:3.9-eclipse-temurin-25` | Spring Boot fat jar |
+| `runtime` | `eclipse-temurin:25-jre` | Backend container |
+| `frontend-runtime` | `gcr.io/distroless/nodejs24-debian12` | Frontend container (runs `node server.js`) |
