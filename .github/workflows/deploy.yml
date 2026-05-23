@@ -103,6 +103,7 @@ jobs:
         with:
           name: frontend-build
           path: frontend/.next/
+          include-hidden-files: true
 
   # ─── Spring Boot backend ──────────────────────────────────────────────────
   backend:
