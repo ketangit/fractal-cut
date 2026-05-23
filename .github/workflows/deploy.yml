@@ -80,6 +80,7 @@ jobs:
 
       - name: Copy Wasm to frontend lib/wasm
         run: |
+          mkdir -p frontend/lib/wasm
           cp pkg/puzzle_core.js frontend/lib/wasm/puzzle_core.js
           cp pkg/puzzle_core_bg.wasm frontend/lib/wasm/puzzle_core_bg.wasm
           cp pkg/puzzle_core.d.ts frontend/lib/wasm/puzzle_core.d.ts
