@@ -147,7 +147,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U puzzlecore"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
@@ -176,8 +176,20 @@ jobs:
           DB_USER: puzzlecore
           DB_PASS: puzzlecore
         run: |
-          java -jar jars/backend-*.jar &
-          until curl -sf http://localhost:8080/actuator/health; do sleep 2; done
+          java -jar jars/backend-*.jar > /tmp/backend.log 2>&1 &
+          BACKEND_PID=$!
+          for i in $(seq 1 60); do
+            if ! kill -0 $BACKEND_PID 2>/dev/null; then
+              echo "Backend process exited unexpectedly"; cat /tmp/backend.log; exit 1
+            fi
+            if curl -sf http://localhost:8080/actuator/health; then
+              echo "Backend is healthy"; break
+            fi
+            if [ $i -eq 60 ]; then
+              echo "Backend failed to become healthy after 120s"; cat /tmp/backend.log; exit 1
+            fi
+            sleep 2
+          done
 
       - uses: pnpm/action-setup@v6
         with:
