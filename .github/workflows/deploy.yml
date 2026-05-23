@@ -141,7 +141,7 @@ jobs:
       - name: Verify Flyway migrations in jar
         run: |
           set -e
-          JAR=$(ls jars/backend-*.jar | head -1)
+          JAR=$(ls backend/target/backend-*.jar | head -1)
           echo "Listing migration scripts in $JAR:"
           unzip -l "$JAR" | grep db/migration || (echo "Migrations not found in jar!" && exit 1)
 
