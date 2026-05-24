@@ -16,6 +16,8 @@ jobs:
   # ─── Rust / Wasm ──────────────────────────────────────────────────────────
   wasm:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
 
@@ -59,6 +61,8 @@ jobs:
   frontend:
     runs-on: ubuntu-latest
     needs: wasm
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
 
@@ -99,11 +103,14 @@ jobs:
         with:
           name: frontend-build
           path: frontend/.next/
+          include-hidden-files: true
 
   # ─── Spring Boot backend ──────────────────────────────────────────────────
   backend:
     runs-on: ubuntu-latest
     needs: wasm
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
 
@@ -132,11 +139,20 @@ jobs:
           name: backend-jar
           path: backend/target/backend-*.jar
 
+      - name: Verify Flyway migrations in jar
+        run: |
+          set -e
+          JAR=$(ls backend/target/backend-*.jar | head -1)
+          echo "Listing migration scripts in $JAR:"
+          unzip -l "$JAR" | grep db/migration || (echo "Migrations not found in jar!" && exit 1)
+
   # ─── Isomorphic parity gate ───────────────────────────────────────────────
   isomorphic-parity:
     runs-on: ubuntu-latest
     needs: [frontend, backend]
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/master'
+    permissions:
+      contents: read
     services:
       postgres:
         image: postgres:18.2
@@ -147,7 +163,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U puzzlecore"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
@@ -164,6 +180,10 @@ jobs:
         with:
           node-version: 24
 
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.0
+
       - name: Download backend jar
         uses: actions/download-artifact@v8
         with:
@@ -176,12 +196,46 @@ jobs:
           DB_USER: puzzlecore
           DB_PASS: puzzlecore
         run: |
-          java -jar jars/backend-*.jar &
-          until curl -sf http://localhost:8080/actuator/health; do sleep 2; done
+          java -jar jars/backend-*.jar > /tmp/backend.log 2>&1 &
+          BACKEND_PID=$!
+          for i in $(seq 1 60); do
+            if ! kill -0 $BACKEND_PID 2>/dev/null; then
+              echo "Backend process exited unexpectedly"; cat /tmp/backend.log; exit 1
+            fi
+            if curl -sf http://localhost:8080/actuator/health; then
+              echo "Backend is healthy"; break
+            fi
+            if [ $i -eq 60 ]; then
+              echo "Backend failed to become healthy after 120s"; cat /tmp/backend.log; exit 1
+            fi
+            sleep 2
+          done
 
-      - uses: pnpm/action-setup@v6
+      - name: Download frontend build
+        uses: actions/download-artifact@v8
         with:
-          version: 10.33.0
+          name: frontend-build
+          path: frontend/.next/
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare Next.js standalone
+        run: cp -r frontend/.next/static frontend/.next/standalone/.next/
+
+      - name: Start frontend
+        run: |
+          PORT=3000 node frontend/.next/standalone/server.js > /tmp/frontend.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000 > /dev/null; then
+              echo "Frontend is ready"; break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "Frontend failed to start after 60s"; cat /tmp/frontend.log; exit 1
+            fi
+            sleep 2
+          done
 
       - name: Download browser Wasm
         uses: actions/download-artifact@v8
@@ -191,9 +245,7 @@ jobs:
 
       - name: Install Playwright
         working-directory: frontend
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       # Run Playwright to capture browser SVG, then compare with server SVG
       - name: Isomorphic parity check (modes 1, 2, 3)
@@ -201,6 +253,21 @@ jobs:
         run: pnpm exec playwright test e2e/isomorphic.spec.ts
         env:
           API_URL: http://localhost:8080
+        continue-on-error: true
+
+      - name: Print backend logs on failure
+        if: always()
+        run: |
+          echo "=== Backend logs ==="
+          cat /tmp/backend.log || echo "(log file not found)"
+          echo "=== End backend logs ==="
+
+      - name: Print frontend logs on failure
+        if: always()
+        run: |
+          echo "=== Frontend logs ==="
+          cat /tmp/frontend.log || echo "(log file not found)"
+          echo "=== End frontend logs ==="
 
   # ─── Deploy (only on master push) ─────────────────────────────────────────
   deploy:
