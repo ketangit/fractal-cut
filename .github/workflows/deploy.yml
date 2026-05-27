@@ -7,7 +7,7 @@ on:
     branches: [master, main]
 
 env:
-  REGION: us-central1
+  REGION: us-east4
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   BACKEND_SERVICE: puzzle-backend
   FRONTEND_SERVICE: puzzle-frontend
